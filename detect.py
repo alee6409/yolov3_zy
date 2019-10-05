@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
-import cv2 
+import cv2 as cv
 from util import *
 import argparse
 import os 
@@ -92,7 +92,7 @@ if not os.path.exists(args.det):
     os.makedirs(args.det)
 
 load_batch = time.time()
-ori_loaded_ims = [cv2.imread(x) for x in imlist]
+ori_loaded_ims = [cv.imread(x) for x in imlist]
 
 im_batches = list(map(prep_image, ori_loaded_ims, [inp_dim for x in range(len(imlist))]))
 ori_im_dim = [(x.shape[1], x.shape[0]) for x in ori_loaded_ims]
@@ -190,11 +190,11 @@ def write(x, results):
     cls = int(x[-1])
     color = random.choice(colors)
     label = "{0}".format(classes[cls])
-    cv2.rectangle(img, c1, c2,color, 1)
-    t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
+    cv.rectangle(img, c1, c2,color, 1)
+    t_size = cv.getTextSize(label, cv.FONT_HERSHEY_PLAIN, 1 , 1)[0]
     c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
-    cv2.rectangle(img, c1, c2,color, -1)
-    cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
+    cv.rectangle(img, c1, c2,color, -1)
+    cv.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
     return img
 
 
@@ -202,7 +202,7 @@ list(map(lambda x: write(x, ori_loaded_ims), output))
 
 det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
 
-list(map(cv2.imwrite, det_names, ori_loaded_ims))
+list(map(cv.imwrite, det_names, ori_loaded_ims))
 
 
 end = time.time()
