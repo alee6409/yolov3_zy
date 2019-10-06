@@ -96,7 +96,7 @@ ori_loaded_ims = [cv.imread(x) for x in imlist]
 
 im_batches = list(map(prep_image, ori_loaded_ims, [inp_dim for x in range(len(imlist))]))
 ori_im_dim = [(x.shape[1], x.shape[0]) for x in ori_loaded_ims]
-ori_im_dim = torch.FloatTensor(ori_im_dim).repeat(1,2)
+ori_im_dim = torch.FloatTensor(ori_im_dim).repeat(1, 2)
 
 
 leftover = 0
@@ -120,13 +120,19 @@ for i, batch in enumerate(im_batches):
     start = time.time()
     if CUDA:
         batch = batch.cuda()
+
+
+
     with torch.no_grad():
         prediction = model(Variable(batch), CUDA)
+
+
 
     prediction = write_results(prediction, confidence, num_classes, nms_conf = nms_thesh)
 
     end = time.time()
-
+    
+    #no detections
     if type(prediction) == int:
 
         for im_num, image in enumerate(imlist[i*batch_size: min((i +  1)*batch_size, len(imlist))]):
@@ -152,7 +158,10 @@ for i, batch in enumerate(im_batches):
         print("----------------------------------------------------------")
 
     if CUDA:
-        torch.cuda.synchronize()       
+        torch.cuda.synchronize()
+
+
+
 try:
     output
 except NameError:
@@ -161,9 +170,9 @@ except NameError:
 
 im_dim_list = torch.index_select(im_dim_list, 0, output[:,0].long())
 
-scaling_factor = torch.min(416/im_dim_list,1)[0].view(-1,1)
+scaling_factor = torch.min(608/im_dim_list,1)[0].view(-1,1)
 
-
+#rescale coordinates
 output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
 output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
 
@@ -187,13 +196,16 @@ def write(x, results):
     c1 = tuple(x[1:3].int())
     c2 = tuple(x[3:5].int())
     img = results[int(x[0])]
+
     cls = int(x[-1])
     color = random.choice(colors)
     label = "{0}".format(classes[cls])
     cv.rectangle(img, c1, c2,color, 1)
+
     t_size = cv.getTextSize(label, cv.FONT_HERSHEY_PLAIN, 1 , 1)[0]
     c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
     cv.rectangle(img, c1, c2,color, -1)
+    
     cv.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
     return img
 

@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F 
 from torch.autograd import Variable
 import numpy as np
-import cv2 
+import cv2 as cv
 
 def unique(tensor):
     tensor_np = tensor.cpu().numpy()
@@ -39,9 +39,10 @@ def bbox_iou(box1, box2):
     #Union Area
     b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1 + 1)
     b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1 + 1)
-    
-    iou = inter_area / (b1_area + b2_area - inter_area)
-    
+    union_area = b1_area + b2_area - inter_area
+
+
+    iou = inter_area / union_area
     return iou
 
 def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = False):
@@ -53,9 +54,12 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = False):
     bbox_attrs = 5 + num_classes
     num_anchors = len(anchors)
     
+    #(batch_size, bbox_attrs*num_anchors*grid_size, grid_size)
     prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
     prediction = prediction.transpose(1,2).contiguous()
     prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
+    
+    
     anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
 
     #Sigmoid the  centre_X, centre_Y. and object confidencce
@@ -78,6 +82,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = False):
 
     prediction[:,:,:2] += x_y_offset
 
+
     #log space transform height and the width
     anchors = torch.FloatTensor(anchors)
 
@@ -87,6 +92,9 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = False):
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
     
+
+
+
     prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes]))
 
     prediction[:,:,:4] *= stride
@@ -94,9 +102,11 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = False):
     return prediction
 
 def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
+    #zero the confidence under
     conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
     prediction = prediction*conf_mask
     
+    #(x, y, width, height)->(ltx, lty, rbx, rby)
     box_corner = prediction.new(prediction.shape)
     box_corner[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
     box_corner[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
@@ -111,14 +121,14 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
 
 
     for ind in range(batch_size):
-        image_pred = prediction[ind]          #image Tensor
+        image_pred = prediction[ind]          #one image Tensor
        #confidence threshholding 
        #NMS
     
-        max_conf, max_conf_score = torch.max(image_pred[:,5:5+ num_classes], 1)
-        max_conf = max_conf.float().unsqueeze(1)
+        max_conf_score, max_conf_index = torch.max(image_pred[:,5:5+ num_classes], 1)
         max_conf_score = max_conf_score.float().unsqueeze(1)
-        seq = (image_pred[:,:5], max_conf, max_conf_score)
+        max_conf_index = max_conf_index.float().unsqueeze(1)
+        seq = (image_pred[:,:5], max_conf_score, max_conf_index)
         image_pred = torch.cat(seq, 1)
         
         non_zero_ind =  (torch.nonzero(image_pred[:,4]))
@@ -134,7 +144,7 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
         #Get the various classes detected in the image
         img_classes = unique(image_pred_[:,-1])  # -1 index holds the class index
         
-        
+        #loop very classes appear in one image
         for cls in img_classes:
             #perform NMS
 
@@ -169,8 +179,9 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
                 non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze()
                 image_pred_class = image_pred_class[non_zero_ind].view(-1,7)
                 
+            #add the index in front of the image
             batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)      #Repeat the batch_id for as many detections of the class cls in the image
-            seq = batch_ind, image_pred_class
+            seq = (batch_ind, image_pred_class)
             
             if not write:
                 output = torch.cat(seq,1)
@@ -190,7 +201,7 @@ def letterbox_image(img, inp_dim):
     w, h = inp_dim
     new_w = int(img_w * min(w/img_w, h/img_h))
     new_h = int(img_h * min(w/img_w, h/img_h))
-    resized_image = cv2.resize(img, (new_w,new_h), interpolation = cv2.INTER_CUBIC)
+    resized_image = cv.resize(img, (new_w,new_h), interpolation = cv.INTER_CUBIC)
     
     canvas = np.full((inp_dim[1], inp_dim[0], 3), 128)
 
