@@ -13,7 +13,7 @@ import cv2 as cv
 def get_test_input():
     img = cv.imread("dog-cycle-car.png")
     img = cv.resize(img, (608,608))          #Resize to the input dimension
-    
+
     img_ =  img[:,:,::-1].transpose((2,0,1))  # BGR -> RGB | H X W C -> C X H X W 
     img_ = img_[np.newaxis,:,:,:]/255.0       #Add a channel at 0 (for batch) | Normalise
     img_ = torch.from_numpy(img_).float()     #Convert to float
@@ -174,7 +174,7 @@ class Darknet(nn.Module):
                 x = self.module_list[i](x)
 
             if module_type == "upsample":
-                x = nn.functional.interpolate(x, x[i-1].shape, scale_factor=2, mode='nearest')
+                x = nn.functional.interpolate(x, scale_factor=2, mode='nearest')
     
             elif module_type == "route":
                 layers = module["layers"]

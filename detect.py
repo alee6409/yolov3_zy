@@ -39,7 +39,7 @@ def arg_parse():
                         default = "yolov3.weights", type = str)
     parser.add_argument("--reso", dest = 'reso', help = 
                         "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
-                        default = "416", type = str)
+                        default = "608", type = str)
     
     return parser.parse_args()
     
@@ -112,7 +112,7 @@ write = 0
 
 
 if CUDA:
-    im_dim_list = im_dim_list.cuda()
+    ori_im_dim = ori_im_dim.cuda()
     
 start_det_loop = time.time()
 for i, batch in enumerate(im_batches):
@@ -168,21 +168,21 @@ except NameError:
     print ("No detections were made")
     exit()
 
-im_dim_list = torch.index_select(im_dim_list, 0, output[:,0].long())
+ori_im_dim = torch.index_select(ori_im_dim, 0, output[:,0].long())
 
-scaling_factor = torch.min(608/im_dim_list,1)[0].view(-1,1)
+scaling_factor = torch.min(608/ori_im_dim,1)[0].view(-1,1)
 
 #rescale coordinates
-output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
-output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
+output[:,[1,3]] -= (inp_dim - scaling_factor*ori_im_dim[:,0].view(-1,1))/2
+output[:,[2,4]] -= (inp_dim - scaling_factor*ori_im_dim[:,1].view(-1,1))/2
 
 
 
 output[:,1:5] /= scaling_factor
 
 for i in range(output.shape[0]):
-    output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim_list[i,0])
-    output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim_list[i,1])
+    output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, ori_im_dim[i,0])
+    output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, ori_im_dim[i,1])
     
     
 output_recast = time.time()
@@ -200,7 +200,7 @@ def write(x, results):
     cls = int(x[-1])
     color = random.choice(colors)
     label = "{0}".format(classes[cls])
-    cv.rectangle(img, c1, c2,color, 1)
+    cv.rectangle(img, c1, c2,color, 5)
 
     t_size = cv.getTextSize(label, cv.FONT_HERSHEY_PLAIN, 1 , 1)[0]
     c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
